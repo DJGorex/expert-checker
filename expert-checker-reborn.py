@@ -423,7 +423,7 @@ def create_html_report(offers, product_title, webcode, discount):
     if best_new_price:
         html_content += f'''
                     <div class="best-price-item">
-                        Gesamtpreis: {format_price(best_new_price['total_price'])} bei <a href="{best_new_price['url']}" target="_blank">expert {best_new_price['store_name']}</a>
+                        Gesamtpreis: {format_price(best_new_price['total_price'])} bei <a href="{best_new_price['url']}" target="_blank">{best_new_price['store_name']}</a>
                     </div>
         '''
     
@@ -700,7 +700,8 @@ def process_branch(branch):
             return
 
         # Preis, Versand und Gesamtpreis berechnen
-        price = round(float(product_data["price"]["bruttoPrice"]) - discount, 2)
+        promotion_info = product_data.get("promotionPrice")
+        price = round(float(promotion_info.get("checkoutPrice")), 2)
         
         # Versandkosten nur bei Online-Verfügbarkeit
         if product_data["price"].get("onlineStock", 0) > 0:
