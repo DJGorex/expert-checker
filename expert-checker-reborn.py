@@ -54,7 +54,7 @@ def get_article_id_from_search(search_term):
             return 0
         for product in product_data:
             counter = product_data.index(product) + 1
-            title = product["article"]["title"]
+            title = product["article"]["seoPageTitle"].split(" - bei expert kaufen")[0]
             print(f"{counter}) {title}")
         choice = int(input("Bitte Produktauswahl treffen: "))
         articleId = product_data[choice - 1]["article"]["articleId"]
@@ -79,11 +79,17 @@ def get_branches():
         "conditions": {
             "storeFinderResultFilter": "ALL"}
     }
+
+    cookies = {
+        'fmarktcookie': 'e_2879130'
+    }
+
     try:
         response = requests.post(
-            'https://www.expert.de/_api/storeFinder/getNearestStores',
+            'https://production.brntgs.expert.de/_api/storeFinder/searchStoresByGeoLocation',
             headers=headers,
             json=params,
+            cookies=cookies,
         )
         branches = response.json()
     except:
@@ -147,24 +153,32 @@ def get_coordinates(plz):
             if DEBUG:
                 print(f"Ungültige PLZ: {plz}")
             return None
-            
-        response = requests.get(f"https://zip-api.eu/api/v1/info/DE-{plz}")
+
+        response = requests.get(f"https://api.zippopotam.us/de/{plz}")
         if response.status_code != 200:
             if DEBUG:
                 print(f"Fehler beim Abrufen der Koordinaten: Status {response.status_code}")
             return None
-            
+
         data = response.json()
-        if "latitude" not in data or "longitude" not in data:
+
+        # Überprüfe, ob 'places' existiert und nicht leer ist
+        if "places" not in data or not data["places"]:
             if DEBUG:
                 print(f"Keine Koordinaten in der Antwort gefunden: {data}")
             return None
-            
-        coordinates = (float(data["latitude"]), float(data["longitude"]))
+
+        # Zugriff auf das erste Element im 'places'-Array
+        place = data["places"][0]
+        coordinates = (
+            float(place["latitude"]),
+            float(place["longitude"])
+        )
+        
         if DEBUG:
             print(f"Koordinaten für PLZ {plz}: {coordinates}")
         return coordinates
-        
+
     except Exception as e:
         if DEBUG:
             print(f"Fehler beim Abrufen der Koordinaten: {str(e)}")
@@ -409,7 +423,7 @@ def create_html_report(offers, product_title, webcode, discount):
     if best_new_price:
         html_content += f'''
                     <div class="best-price-item">
-                        Gesamtpreis: {format_price(best_new_price['total_price'])} bei <a href="{best_new_price['url']}" target="_blank">expert {best_new_price['store_name']}</a>
+                        Gesamtpreis: {format_price(best_new_price['total_price'])} bei <a href="{best_new_price['url']}" target="_blank">{best_new_price['store_name']}</a>
                     </div>
         '''
     
@@ -523,7 +537,7 @@ def get_article_id_from_id(article_id):
         # Mit dem Webcode die vollständigen Produktdaten abrufen
         webcode = data["webcode"]
         title_response = requests.get(
-            f"https://production.brntgs.expert.de/api/search/article/webcode/{webcode}",
+            f"https://production.brntgs.expert.de/api/search/article?webcode={webcode}",
             headers=headers
         )
         
@@ -534,12 +548,12 @@ def get_article_id_from_id(article_id):
             
         title_data = title_response.json()
         
-        if not title_data or not title_data.get("article"):
+        if not title_data or not title_data.get("slug"):
             if DEBUG:
                 print("Keine Produktdaten in der API-Antwort gefunden")
             return 0
             
-        article = title_data["article"]
+        article = title_data
         
         # Baue die vollständige URL
         if article.get("slug"):
@@ -686,7 +700,8 @@ def process_branch(branch):
             return
 
         # Preis, Versand und Gesamtpreis berechnen
-        price = round(float(product_data["price"]["bruttoPrice"]) - discount, 2)
+        promotion_info = product_data.get("promotionPrice")
+        price = round(float(promotion_info.get("checkoutPrice")), 2)
         
         # Versandkosten nur bei Online-Verfügbarkeit
         if product_data["price"].get("onlineStock", 0) > 0:
@@ -733,9 +748,9 @@ if AUTO_OPEN_BROWSER or input('\nErgebnis im Browser ansehen?  (j/n): ').lower()
     # Extrahiere den Webcode aus der URL
     webcode = url.split("/")[-1].split("-")[0]
     # Hole den Produkttitel von der API
-    title_response = requests.get(f"https://production.brntgs.expert.de/api/search/article/webcode/{webcode}", headers=headers)
+    title_response = requests.get(f"https://production.brntgs.expert.de/api/search/article?webcode={webcode}", headers=headers)
     title_data = title_response.json()
-    product_title = title_data["article"]["seoPageTitle"].split(" - bei expert kaufen")[0] if title_data["article"].get("seoPageTitle") else title_data["article"]["title"]
+    product_title = title_data.get("seoPageTitle").split(" - bei expert kaufen")[0] if title_data.get("seoPageTitle") else title_data.get("article", {})
     html_file = create_html_report(all_offers, product_title, webcode, discount)
     webbrowser.open(f'file://{html_file}')
 
