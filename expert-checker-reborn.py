@@ -1,4 +1,4 @@
-# Version 2.0
+# Version 2.1
 # Credits MyDealz @Barney & @Gorex 
 
 import requests
@@ -58,7 +58,7 @@ def get_article_id_from_search(search_term):
             print(f"{counter}) {title}")
         choice = int(input("Bitte Produktauswahl treffen: "))
         articleId = product_data[choice - 1]["article"]["articleId"]
-        url = "https://www.expert.de/shop/unsere-produkte/" + product_data[choice - 1]["article"]["slug"]
+        url = "https://www.expert.de" + product_data[choice - 1]["article"]["link"]
         return articleId, url
     except:
         return 0
@@ -191,6 +191,8 @@ def get_discount(articleId):
     # API-Anfrage an expert für aktive Promotionen
     response = requests.get("https://production.brntgs.expert.de/api/activePromotions", headers=headers)
     promotions = response.json()
+
+    seen_titles = set()
     
     # Jede Promotion wird überprüft
     for promotion in promotions:
@@ -201,6 +203,9 @@ def get_discount(articleId):
         if articleId in affectedArticles:
             try:
                 title = promotion["title"]
+                if title in seen_titles:
+                    continue
+                seen_titles.add(title)
                 # Rabattbetrag aus der Promotion extrahieren
                 discount = promotion["orderModification"][0]["discountRanges"][0]["discount"]
                 if DEBUG:
@@ -548,7 +553,7 @@ def get_article_id_from_id(article_id):
             
         title_data = title_response.json()
         
-        if not title_data or not title_data.get("slug"):
+        if not title_data or not title_data.get("link"):
             if DEBUG:
                 print("Keine Produktdaten in der API-Antwort gefunden")
             return 0
@@ -556,11 +561,11 @@ def get_article_id_from_id(article_id):
         article = title_data
         
         # Baue die vollständige URL
-        if article.get("slug"):
-            url = f"https://www.expert.de/shop/unsere-produkte/{article['slug']}"
+        if article.get("link"):
+            url = f"https://www.expert.de{article['link']}"
         else:
             if DEBUG:
-                print("Kein Slug für die URL-Konstruktion gefunden")
+                print("Kein Link für die URL-Konstruktion gefunden")
             return 0
         
         if DEBUG:
@@ -641,6 +646,19 @@ if not only_online_offers:
 # Filialen, Artikeldaten und eventuelle Direktabzüge abrufen
 print("Rufe Filialen ab...")
 branches = get_branches()
+
+online_shop = {
+    "store": {
+        "id": "e_2879130",
+        "expId": "2879130",
+        "city": "Onlineshop <",
+        "name": ">",
+        "latitude": 0,
+        "longitude": 0
+        }
+}
+
+branches.append(online_shop)
 
 print("Suche nach Direktabzügen...")
 discount = get_discount(articleId)
